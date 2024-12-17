@@ -1,0 +1,487 @@
+---
+title: "Projet_PRO1036"
+author: "Audrey Bergeron"
+date: "2024-12-02"
+output: html_document
+---
+
+### Importation des données et chargement des packages 
+
+Tout d'abord, nous allons charger les packages nécessaires (déjà installés) pour réaliser l'analyse. Ainsi, nous allons charger "tidyverse", "readr" et "tidymodels". 
+```{r}
+#| message: false
+# Chargement des packages 
+library(tidyverse)
+library(readr)
+library(tidymodels)
+```
+
+La deuxième étape est d'importer les données cumulatives des urgences au Québec. Ces données sont dans un fichier csv, d'où la nécessité de charger le package "readr". Ainsi, nous allons importer ces données avec la fonction read_delim(), puisque le délimiteur est un point-virgule. 
+```{r}
+# Importation des données cumulatives des urgences 
+urgences <- read_delim("Donnees_cumulatives_Urgence.csv")
+```
+
+Finalement, la dernière étape est d'importer les données concernant la population selon les régions sociosanitaires. Ces données, datant de 2023, sont fournies par l'Institut de la statistique du Québec (https://statistique.quebec.ca/fr/document/le-quebec-chiffres-en-main). Finalement, ces données ont été ajoutées dans un fichier csv. 
+```{r}
+# Importation des données de la population des régions sociosanitaires 
+population_2023 <- read_delim("Population_region_sociosanitaire.csv")
+```
+
+
+
+### Introduction 
+
+Depuis plusieurs années, les urgences font malheureusement les manchettes des journaux pour les délais d'attente interminables. Dans certains cas, les longs délais de prise en charge ont conduit à des résultats désastreux, tels que la mort de patients aux urgences. La population québécoise demande des explications concernant cette situation en plus d'exiger des réformes afin d'améliorer le système des urgences au Québec. Il est inconcevable d'attendre des heures pour voir un médecin à l'urgence : le terme est clair, des soins médicaux sont nécessaires dans l'immédiat. Ceci mène à plusieurs questionnements et problématiques. En effet, la présente analyse essaiera de présenter divers liens afin d'expliquer la situation des urgences au Québec. Plus précisément, nous allons regarder les relations pour l'année courante, en plus de regarder le cumulatif des 4 dernières années. Ainsi, les questions de recherches qui seront répondues sont : 
+
+1 - Quelle est la durée moyenne du séjour, selon les régions sociosanitaires, pour les urgences au Québec pour l'année courante? Pour les 4 dernières années? 
+2 - Quel est le nombre moyen de patients en attente de prise en charge par région sociosanitaire pour l'année courante? 
+3 - Existe-t-il une relation linéaire entre la durée du séjour et le délai de prise en charge pour les patients (ambulatoires et sur civière)?
+4 - Quelle est la relation entre le nombre de patients ambulatoires en attente de prise en charge et le nombre de patients ambulatoires pour une région sociosanitaire pour l'année courante? Pour les 4 dernières années? 
+5 - Quelle est la corrélation entre la densité de la population et l'achalandage à l'urgence selon les régions sociosanitaires pour l'année courante?
+6 - Quelle est la relation entre l'achalandage, la densité de la population et le nombre de patients pris en charge dans les urgences selon les régions sociosanitaires du Québec pour l'année courante? 
+
+
+
+### Données 
+
+Comme déjà mentionnées dans la section "importation des données et chargement des packages", les données cumulatives des urgences du Québec proviennent de Données Québec (https://www.donneesquebec.ca/recherche/dataset/fichier-cumulatif-des-donnees-des-urgences), plus précisément de la Banque de données communes des urgences (BDCU). Ce fichier présente les données cumulatives de certaines informations des urgences du 1er avril à la fin de la dernière période validée de l'année financière courante, ainsi que les données cumulatives des 4 dernières années financières. Ce fichier est mis à jour à chaque période financière. De plus, les données sont présentées pour chaque région sociosanitaire du Québec que voici : 
+
+(1) Bas-Saint-Laurent, (2) Saguenay-Lac-Saint-Jean, (3) Capitale-Nationale, (4) Mauricie et Centre-du-Québec, (5) Estrie, (6) Montréal, (7) Outaouais, (8) Abitibi-Témiscamingue, (9) Côte-Nord, (10) Gaspésie-Îles-de-la-Madeleine, (11) Chaudière-Appalaches, (12) Laval, (13) Lanaudière, (14) Laurentides, (15) Montérégie 
+
+Ce jeu de données des urgences comporte 27 variables et 795 observations. Cependant, certaines variables ne seront pas prises en compte, telles que 
+a) cumul_period
+b) nom_établissement
+c) nom_installation
+d) no_permis_installation
+e) nb_usagers_75ans_et_plus_amb
+f) nb_usagers_75ans_et_plus_civ
+
+Pour poursuivre, voici les explications concernant les variables utilisées et intéressantes pour la présente analyse. 
+1) annee : année dans laquelle a débuté l'épisode de soins.
+2) rss : numéro de région sociosanitaire dans laquelle se situe l’installation.
+3) region : région sociosanitaire dans laquelle se situe l'installation. 
+4) nb_visites_total : nombre total de visites à l'urgence, incluant les usagers ambulatoires et sur civière.
+5) nb_usagers_75ans_et_plus_total : nombre total de visites à l'urgence pour les patients âgés de 75 ans et plus. 
+6) nb_usagers_sante_mentale_total : nombre total de visites à l'urgence pour les usagers ayant une problématique en santé mentale. 
+7) dms_total : durée moyenne de séjour pour l'ensemble des usagers, où cette variable représente la durée entre l'arrivée et le départ de l'usager de l'urgence. Les données sont en format de nombre décimal.
+8) nb_usagers_pec_total : nombre d'usagers total pris en charge par un médecin. 
+9) delai_pec_total : délai de prise en charge pour les usagers (ambulatoires et sur civière) ayant été pris en charge par un médecin
+10) nb_visites_ambulatoire : nombre de visites à l'urgence pour des usagers ambulatoires (n'exigent pas d'être sur une civière). 
+11) nb_usagers_sante_mentale_amb : nombre de visites ambulatoires à l'urgence pour les usagers ayant une problématique en santé mentale. 
+12) dms_ambulatoire : durée moyenne de séjour ambulatoire, où cette variable représente la durée entre l'arrivée et le départ de l'usager de l'urgence pour les patients en salle d'attente. Les données sont en nombres décimaux. 
+13) nb_usagers_pec_ambulatoire : nombre d'usagers ambulatoires pris en charge par un médecin. 
+14) delai_pec_ambulatoire : délai de prise en charge pour des usagers ambulatoires. 
+15) nb_visites_sur_civiere : nombre de visites à l'urgence pour des usagers sur civière. 
+16) nb_usagers_sur_civiere_plus_24h : nombre d'usagers sur civière dont la durée de séjour à l'urgence a été égale ou plus grande que 24 heures. 
+17) nb_usagers sur civiere_plus_48h : nombre d'usagers sur civière dont la durée du séjour à l'urgence a été égale ou plus grande que 48 heures. 
+18) dms_sur_civiere : durée moyenne de séjour sur civière, où cette variable correspond entre l'arrivée et le départ de l'usager.
+19) nb_usagers_pec_sur_civiere : nombre d'usagers sur civière pris en charge par un médecin. 
+20) delai_pec_sur_civiere : délai de prise en charge pour des usagers sur civière. 
+21) nb_usagers_sante_mentale_civ : nombre de visites sur civière à l'urgence pour les usagers ayant une problématique en santé mentale. 
+
+Ensuite, les données de la population selon les régions sociosanitaires sont également importées depuis l'Institut de la statistique du Québec (https://statistique.quebec.ca/fr/document/le-quebec-chiffres-en-main). Ici, les données ont été entrées dans un fichier Excel, puis converties en fichier csv. Ainsi, ce fichier permet d'obtenir la population, en 2023, pour les 15 régions sociosanitaires. Finalement, il est important de mentionner que le nombre d'habitants pour les régions de la Mauricie et du Centre-du-Québec a été additionné puisque ces deux régions, dans les données des urgences, sont considérées comme une seule région.  
+
+Ce jeu comporte ainsi 2 variables et 17 observations, lesquelles permettront de lier l'achalandage des urgences et la population selon les régions. Voici les variables : 
+1) region_sociosanitaire : régions sociosanitaires du Québec (17 régions mentionnées ci-dessus). 
+2) Population : la population dans la région sociosanitaire en 2023. 
+
+
+
+### Analyse des données 
+
+Tout d'abord, commençons par regarder les deux jeux de données afin de vérifier que les données sont tidy. 
+```{r}
+# Visualisation de "urgences"
+glimpse(urgences)
+```
+
+Puisque nous avons enlevé des variables, nous allons créer un nouveau jeu de données qui exclut les variables non nécessaires. Ce jeu de données s'appellera "my_urgences". De cette manière, ce jeu de données ne comportera seulement que les variables choisies (19 variables). Ainsi, le reste de la présente analyse sera sur le jeu de données "my_urgences".
+```{r}
+# Jeu de données my_urgences 
+my_urgences <- urgences %>%
+  select(-c(cumul_periode, nom_etablissement, nom_installation, no_permis_installation, nb_usagers_75ans_et_plus_amb, nb_usagers_75ans_et_plus_civ)) %>%
+  glimpse()
+```
+
+* Note importante : il est possible de remarquer que les régions sociosanitaires ont plusieurs urgences. Cependant, pour la présente analyse, je ne considérai seulement que la moyenne des urgences pour une région c'est-à-dire que je ne regarderai pas les données pour toutes les urgences d'une même région. Ici, je m'intéresse principalement aux régions sociosanitaires. 
+
+Ensuite, nous allons regarder le jeu de données "population_2023" afin de vérifier que les données sont tidy. 
+```{r}
+# Visualisation de population_2023
+glimpse(population_2023)
+```
+
+
+# 1 - Quelle est la durée moyenne du séjour, selon les régions sociosanitaires, pour les urgences au Québec pour l'année courante? Pour les 4 dernières années?
+
+Nous allons commencer par regarder la durée moyenne de séjour dans les urgences, selon les régions sociosanitaires, pour l'année courante (2024-2025). Ainsi, nous allons être en mesure de voir la durée du séjour des usagers (ambulatoires et sur civière) entre leur arrivée et leur départ. Finalement, les résultats obtenus sont la moyenne de la durée du séjour des différents établissements dans les régions sociosanitaires. 
+```{r}
+# Durée moyenne du séjour des usagers en 2024-2025
+my_urgences %>% 
+  filter(annee == "2024-2025") %>%
+  group_by(region) %>%
+  count(dms_total) %>%
+  summarise(mean_dms = mean(dms_total)) %>%
+  arrange(desc(mean_dms))
+```
+
+Ensuite, regardons la durée moyenne de séjour dans les urgences, selon les régions sociosanitaires, pour les 4 dernières années. Ainsi, nous allons être en mesure de voir la durée du séjour des usagers (ambulatoires et sur civière) entre leur arrivée et leur départ. Finalement, les résultats obtenus sont la moyenne de la durée du séjour des différents établissements dans les régions sociosanitaires. 
+```{r}
+# Durée moyenne du séjour des usagers pour les 4 dernières années
+my_urgences %>% 
+  filter(annee == c("2020-2021", "2021-2022", "2022-2023", "2023-2024")) %>%
+  group_by(region, annee) %>%
+  count(dms_total) %>%
+  summarise(mean_dms = mean(dms_total))
+```
+
+Tout d'abord, commençons par regarder la durée moyenne du séjour pour l'année courante selon les régions sociosanitaires. Les deux moyennes les plus élevées sont pour Montréal (11.60 heures) et la Montérégie (11.28 heures). Ensuite, nous avons Laval (10.65 heures), Laurentides (10.51 heures), Lanaudière (10.01 heures). Ensuite, l'Estrie et l'Outaouais ont des moyennes similaires, 7.96 heures et 7.80 heures, respectivement. De plus, la Mauricie et Centre-du-Québec a une moyenne de 6.46 heures, la Capitale-Nationale est de 6.44 heures et le Saguenay-Lac-Saint-Jean est de 6.13 heures. La durée moyenne des séjours pour Chaudière-Appalaches (5.85 heures), Côte-Nord (5.67 heures) et Abitibi-Témiscamingue (5.64 heures) est similaire. Finalement, les deux régions avec la durée moyenne la plus basse sont la Gaspésie-Îles-de-la-Madeleine (4.70 heures) et le Bas-Saint-Laurent (4.40 heures). Ici, de manière très intéressante, les régions qui ont des durées moyennes de séjour semblables sont, majoritairement, proches l'une des autres. En effet, les seules régions éloignées, ayant des durées moyennes semblables, sont l'Estrie/Outaouais ainsi que Chaudière-Appalaches/Côte-Nord/Abitibi-Témiscamingue. Ainsi, de manière générale, les régions qui sont proches ont des séjours d'une durée semblable : certainement dû au fait que le nombre d'habitants tend vers la même direction. 
+
+En ce qui concerne la durée moyenne pour les 4 dernières années, nous allons simplement regarder la tendance générale de la durée du séjour. Ainsi, de manière générale, les régions ont des durées moyennes de séjour, pour l'année 2024-2025, qui tendent vers les moyennes des 4 dernières années. Cependant, certaines régions se démarquent : Laval, Mauricie, Saguenay-Lac-Saint-Jean et Abitibi-Témiscamingue ont tous eu des durées moyennes supérieures à celles des 4 dernières années. Ceci peut être expliqué par plusieurs facteurs, tels qu'une migration vers ces régions. Finalement, une dernière observation est l'intervalle des durées moyennes des 4 dernières années. En effet, il y a 4 régions qui ont des intervalles non négligeables. La Mauricie a un écart de 3.09 heures, Montréal est de 4.37 heures, Montérégie est de 3.12 heures et Outaouais est de 4.04 heures. Une fois de plus, une migration vers ces régions peut être un facteur expliquant cet écart. 
+
+Maintenant, afin de bien distinguer les durées moyennes de séjours pour les patients ambulatoires (dans la salle d'attente) et les patients sur civière, nous allons regarder la durée moyenne pour l'année courante (2024-2025). Ceci permettra de poser une hypothèse quant au séjour selon le type de patient. 
+```{r}
+# Durée moyenne du séjour pour les patients ambulatoires et sur civière
+my_urgences %>% 
+  filter(annee == "2024-2025") %>%
+  group_by(region) %>%
+  count(dms_ambulatoire, dms_sur_civiere) %>%
+  summarise(mean_ambulatoire = mean(dms_ambulatoire), 
+            mean_civiere = mean(dms_sur_civiere)) %>%
+  arrange(desc(mean_ambulatoire))
+```
+
+Il est rapidement possible de remarquer que la durée moyenne du séjour pour les patients sur civière est largement supérieure à celle d'un patient ambulatoire. Ceci est plutôt logique : un patient sur civière coïncide avec des blessures graves ou une chirurgie en attente. De plus, de manière intéressante, la durée moyenne du séjour la plus élevée pour un patient ambulatoire (Laval = 6.53 heures) ne correspond pas à la durée moyenne du séjour la plus élevée pour un patient sur civière (Montréal = 20.96 heures). Cette distinction peut être expliquée par la disponibilité de médecins spécialistes, par exemple. Les régions éloignées ne possèdent pas nécessairement des spécialistes d'un domaine médical (ex. orthopédiste). Ainsi, il se peut que les patients nécessitant ce type de prise en charge soient déplacés vers les grands centres, tels que Montréal, lesquels possèdent des spécialistes de tous genres médicaux. 
+
+
+# 2 - Quel est le nombre moyen de patients en attente de prise en charge par région sociosanitaire pour l'année courante? 
+
+La première question nous a permis d'obtenir une vue d'ensemble sur la durée moyenne du séjour des patients ambulatoires et sur civière selon les diverses régions sociosanitaires pour l'année courante. Cependant, ceci amène la présente question : quel est le délai moyen de prise en charge de ces patients? Ainsi, nous allons, en premier lieu, regarder le nombre moyen de patients pris en charge, par région, pour l'année courante. En deuxième lieu, nous allons regarder la proportion des patients pris en charge par rapport au nombre total de patients. Finalement, nous terminerons en regardant le délai moyen d'attente de prise en charge pour les patients (totaux et ambulatoires/sur civière). 
+```{r}
+# Nombre moyen de patients (ambulatoires et sur civière) pris en charge pour l'année courante 
+my_urgences %>% 
+  filter(annee == "2024-2025") %>%
+  group_by(region) %>%
+  count(nb_usagers_pec_total) %>%
+  summarise(mean_usagers_pec = mean(nb_usagers_pec_total)) %>%
+  arrange(desc(mean_usagers_pec))
+```
+
+Ces résultats permettent de mettre en lumière le nombre de patients pris en charge pour l'année courante. Rapidement, les trois régions ayant le plus de patients pris en charge sont Lanaudière, Montréal et Laval. Afin d'éviter les répétitions, la liste exhaustive de toutes les régions ne sera pas décrite ici, mais de manière générale ces trois régions se retrouvent souvent dans le haut de la liste, soit une durée moyenne de séjour élevée ou le nombre de patients pris en charge. La raison expliquant cette observation peut être la densité de la population pour ces régions : nous le verrons plus loin dans l'analyse. 
+
+En outre, ces résultats seuls ne sont pas très intéressants : nous cherchons plus à voir la proportion de patients pris en charge, par rapport au nombre total de patients. Ce rapport permettra d'analyser l'efficacité d'une urgence (de manière grossière). 
+```{r}
+# Proportion de patients pris en charge par rapport aux patients totaux par région pour l'année courante 
+my_urgences %>% 
+  filter(annee == "2024-2025") %>%
+  group_by(region) %>%
+  count(nb_usagers_pec_total, nb_visites_total) %>%
+  mutate(prop = nb_usagers_pec_total/nb_visites_total) %>%
+  summarise(mean_prop = mean(prop)) %>%
+  arrange(desc(mean_prop))
+```
+
+Comme mentionné ci-dessus, cette proportion permet de rapidement voir l'efficacité d'une urgence, soit le rapport entre le nombre de patients pris en charge (vu par un médecin) et le nombre total de visites à l'urgence d'une région. Une valeur de 1, pour cette proportion, indique que tous les patients à l'urgence ont été pris en charge par un médecin : nous cherchons donc une proportion qui tend vers 1. Ainsi, nous sommes en mesure de voir que l'intervalle des proportions va de 0.739 à 0.876. De manière générale, les urgences ont une bonne efficacité. Par exemple, la région de la Gaspésie-Îles-de-la-Madeleine a pris en charge 88% des patients dans leurs urgences (proportion la plus élevée). La région ayant pris en charge le moins de patients, soit 74% des patients totaux, est Lanaudière. Cette proportion reste toutefois acceptable. Finalement, les patients qui n'ont pas été pris en charge peuvent avoir quitté avant d'avoir vu un médecin (ex. temps d'attente trop long) ou ils ont pu être redirigés vers un autre centre hospitalier.   
+
+Pour terminer cette question, nous nous intéressons également au délai de prise en charge des patients totaux au sein d'une région pour l'année courante. Nous venons tout juste de voir la proportion de patients pris en charge : voyons maintenant le délai de prise en charge par un médecin. 
+```{r}
+# Délai moyen de prise en charge pour les patients (ambulatoires et sur civière) selon les régions pour l'année courante 
+my_urgences %>% 
+  filter(annee == "2024-2025") %>%
+  group_by(region) %>%
+  count(delai_pec_total) %>%
+  summarise(mean_pec = mean(delai_pec_total)) %>%
+  arrange(desc(mean_pec))
+```
+
+De manière très intéressante, le délai moyen de prise en charge le plus élevé est de 3.92 heures dans la région de la Montérégie. Ce délai d'environ 4 heures d'attente n'est pas extrêmement élevé : certes, une urgence doit rapidement répondre aux besoins des patients, mais le délai de prise en charge reste toutefois acceptable. Ceci dit, la Montérégie a pris en charge 75% des patients avec un délai d'attente d'environ 4 heures, ceci reste toutefois une urgence assez efficace. Rappelons-nous que la région de la Gaspésie-Îles-de-la-Madeleine a pris en charge 88% de leurs patients, mais quel a été le délai moyen de prise en charge? 1.97 heures (délai moyen d'attente le plus bas)! Ainsi, cette région a pris en charge 88% des patients avec un délai d'attente moyen d'environ 2 heures. À première vue, il semble que cette région a la meilleure efficacité pour la prise en charge. Cependant, nous devons regarder d'autres facteurs avant d'assumer cette observation, telle que la densité de la population. 
+
+De manière complémentaire au code précédent, nous pouvons regarder le délai moyen de prise en charge pour les patients ambulatoires et sur civière selon les régions. Le but de séparer ces deux variables est de voir si les patients sur civière sont pris en charge plus rapidement. De manière générale, ces patients ont besoin de soins immédiats ou encore, sont dans un état critique. 
+```{r}
+# Délai moyen de prise en charge pour les patients ambulatoires et sur civière pour l'année courante selon les régions
+my_urgences %>% 
+  filter(annee == "2024-2025") %>%
+  group_by(region) %>%
+  count(delai_pec_ambulatoire, delai_pec_sur_civiere) %>%
+  summarise(mean_pec_ambu = mean(delai_pec_ambulatoire),
+            mean_pec_civiere = mean(delai_pec_sur_civiere)) %>%
+  arrange(desc(mean_pec_ambu))
+```
+
+Tout d'abord, toutes les régions prennent en charge les patients sur civière plus rapidement que les patients ambulatoires : ceci va dans le sens des explications précédentes. De plus, la région de la Gaspésie-Îles-de-la-Madeleine a le délai moyen d'attente le plus petit pour les patients ambulatoires (2.12 heures) et un des plus petits pour les patients sur civière (1.36 heure). Le plus petit délai moyen d'attente pour les patients sur civière revient à la région de Chaudière-Appalaches avec un délai moyen de 0.89 heure. Bref, nous pouvons supposer que les urgences du Québec prennent en charge plus rapidement les patients sur civière, car ces derniers nécessitent généralement des soins immédiats. 
+
+Finalement, une dernière analyse est de regarder le nombre de patients sur civière pour un délai égal ou supérieur à 24h ainsi que pour un délai égal ou supérieur à 48h. Ici, le but de cette analyse est de comprendre la relation entre le nombre de civières utilisées et le délai de prise en charge. En effet, plus il y a de patients sur civière, moins il y a de place (civières disponibles) pour les patients en attente de prise en charge. Ceci peut donc augmenter les délais de prise en charge. Commençons par sélectionner les données que nous voulons dans my_urgences. Ainsi, nous voulons filtrer pour l'année courante, en excluant le total provincial. Les données seront également des moyennes pour les régions sociosanitaires.  
+```{r}
+# Sélection des patients sur civières avec un séjour de 24h et 48h et plus pour l'année 2024-2025 
+urgences_Q2 <- my_urgences %>%
+  select(region, nb_usagers_sur_civiere_plus_24h, nb_usagers_sur_civiere_plus_48h, annee) %>%
+  filter(annee == "2024-2025", 
+         region != "Total provincial") %>%
+  group_by(region) %>%
+  summarise(mean_24h = mean(nb_usagers_sur_civiere_plus_24h), 
+            mean_48h = mean(nb_usagers_sur_civiere_plus_48h)) %>%
+  arrange(desc(mean_24h)) %>%
+  print()
+```
+
+Ces résultats indiquent que pour la majorité des régions, le nombre de patients sur civière avec un séjour égal ou supérieur à 24h est assez élevé : seules les régions de la Côte-Nord, Abitibi-Témiscamingue, Bas-Saint-Laurent et Gaspésie-Îles-de-la-Madeleine ont un nombre de patients inférieurs à 1000. Ceci permet de supposer que ces nombres élevés peuvent expliquer les délais d'attente de prise en charge : plus il y a de patients sur civière, moins il y en a de disponibles. Prenons un exemple, la Montérégie, soit la région avec le plus de patients sur civière pendant 48h ou plus (2073 personnes) et 6724 patients sur civière pendant 24h ou plus. Voici les délais moyens de prise en charge pour cette région, soit le délai d'attente moyen des patients totaux (3.92 heures), le délai d'attente ambulatoire moyen (4.93 heures) et le délai d'attente sur civière moyen (2.97 heures). Tous ces délais sont soit les plus élevés ou dans les trois plus élevés. Ceci permet d'appuyer notre hypothèse : plus il y a de civières utilisées, plus les délais de prise en charge sont élevés. À l'opposé, la région de la Gaspésie-Îles-de-la-Madeleine a une moyenne de patients de 375 patients pour un séjour de 24h ou plus et de 54 patients pour un séjour de 48h ou plus. Voici les délais moyens de prise en charge pour cette région, soit le délai d'attente moyen des patients totaux (1.97 heure), le délai d'attente ambulatoire moyen (2.11 heures) et le délai d'attente sur civière moyen (1.36 heure). Tous ces délais sont les plus bas ou dans les trois plus bas : ces observations permettent également d'appuyer notre hypothèse.
+
+
+# 3 - Existe-t-il une relation linéaire entre la durée du séjour et le délai de prise en charge pour les patients (ambulatoires et sur civière)?
+Les deux dernières questions de recherche ont permis de mettre en lumière la durée moyenne de séjour pour les régions sociosanitaires ainsi que le délai moyen de prise en charge pour ces régions. Ceci m'amène à une supposition, soit que plus le délai de prise en charge est tardif, plus la durée du séjour est longue, mais est-ce vraiment le cas? Est-il vrai de dire qu'une variable explique l'autre? Ainsi, nous allons vérifier si les deux variables ont une relation linéaire, soit une relation proportionnelle : si une variable augmente, l'autre augmente également. 
+```{r}
+# Relation linéaire entre la durée du séjour et le délai de prise en charge 
+linear_reg() %>%
+  set_engine("lm") %>%
+  fit(dms_total ~ delai_pec_total, data = my_urgences) %>%
+  tidy()
+```
+
+Ces données permettent de formuler l'équation suivante : y = 1.67x + 3.56, où x est le délai de prise en charge (delai_pec_total) et y est la durée du séjour (dms_total). L'équation précédemment établie peut être utilisée pour prédire la durée du séjour pour un patient selon son délai d'attente de prise en charge, seulement dans la mesure où le coefficient de détermination (R^2) tend vers la valeur de 1 (relation parfaitement linéaire). 
+
+En ce sens, regardons ce coefficient de corrélation pour ces deux variables afin de voir si nous pouvons prédire la durée moyenne du séjour selon le délai de prise en charge.
+```{r}
+# Coefficient de corrélation pour la durée du séjour et le délai de prise en charge 
+lm_urgence <- lm(dms_total ~ delai_pec_total, data = my_urgences) %>% 
+  summary() %>%
+  print()
+```
+
+Il est rapidement possible de voir que le coefficient de détermination est très bas, soit 0.217 : ceci indique que la relation n'est pas linéaire. En effet, ce coefficient est loin de la valeur de 1, nous ne pouvons pas dire que le délai de prise en charge explique, à lui seul, la durée du séjour à l'urgence : il y a d'autres variables qui expliquent la durée du séjour. Finalement, l'équation qui nous avons établi ne peut pas être utilisée pour prédire la durée du séjour, puisque la relation entre les deux variables n'est pas linéaire. 
+
+Puisque le délai de prise en charge n'explique pas la durée du séjour, regardons maintenant si une autre variable peut l'expliquer. Prenons le nombre de visites totales comme variable et regardons le coefficient de corrélation. 
+```{r}
+# Coefficient de corrélation pour la durée du séjour et le nombre total de visites
+lm_urgence_delai <- lm(dms_total ~ nb_visites_total, data = my_urgences) %>% 
+  summary() %>%
+  print()
+```
+
+Ces résultats permettent de rapidement voir que la relation est très loin d'être linéaire : le coefficient de corrélation est de 0.0065. Ainsi, il semble que la durée du séjour ne peut pas être expliquée par ces variables (delai_pec_total et nb_visites_total). 
+
+
+
+# 4 - Quelle est la relation entre le nombre de patients ambulatoires en attente de prise en charge et le nombre de patients ambulatoires pour une région sociosanitaire pour l'année courante? Pour les 4 dernières années? 
+Encore une fois, nous cherchons une relation linéaire entre deux variables. Cependant, au lieu d'utiliser des modèles mathématiques pour prédire un coefficient de corrélation, commençons par tout d'abord représenter ces deux variables sous forme de graphique. Ici, le but est de représenter visuellement la distribution des données, soit de voir si le nombre de patients ambulatoires en attente augmente de manière proportionnelle avec le nombre total de patients ambulatoires. 
+
+La première étape, avant de construire le graphique, est de filtrer les données des urgences pour l'année courante (filter(annee == "2024-2025")). De plus, nous voulons avoir le nombre moyen de visites et le délai moyen pour les patients ambulatoires selon les régions sociosanitaires. Le résultat du code est simple : nous obtenons seulement les données pour l'année courante, en excluant le total provincial.  
+```{r}
+# Filtrer les données des urgences pour le graphique 2024-2025 
+filtered_urgences <- my_urgences %>%
+  filter(annee == "2024-2025", 
+         region != "Total provincial") %>%
+  group_by(region) %>%
+  count(nb_visites_ambulatoire, delai_pec_ambulatoire) %>%
+  summarise(mean_visites_amb = mean(nb_visites_ambulatoire), 
+            mean_delai_pec_amb = mean(delai_pec_ambulatoire)) %>%
+  print()
+```
+
+Avec les données filtrées précédemment faites, nous pouvons maintenant construire un graphique qui permettra de visualiser rapidement si les deux variables (nombre moyen de visites ambulatoires et délai ambulatoire moyen de prise en charge) semblent avoir une relation linéaire. Pour ce faire, nous utiliserons ggplot et le nuage de point. 
+```{r}
+# Relation entre le délai ambulatoire moyen et le le nombre moyen de visites ambulatoires 
+ggplot(filtered_urgences,
+       aes(x = mean_visites_amb,
+           y = mean_delai_pec_amb, 
+           colour = region)) + 
+  geom_point() +
+  labs(title = "Le délai moyen de prise en charge selon le nombre moyen de visites à l'urgence", 
+       subtitle = "Selon les régions sociosanitaires du Québec en 2024-2025",
+       x = "Le nombre moyen de visites ambulatoires", 
+       y = "Le délai ambulatoire moyen d'attente", 
+       colour = "Région sociosanitaire") +
+  scale_color_viridis_d()
+```
+
+Comme nous pouvons le voir avec le nuage de point ci-dessus, le délai ambulatoire moyen ne varie pas en fonction du nombre moyen de visites ambulatoires selon les régions sociosanitaires. Personnellement, la relation linéaire entre ces deux variables semblait logique, mais comme nous pouvons le voir par la distribution des points, aucune relation proportionnelle ne peut être observée. Ainsi, comme pour la question de rechercher #3, le nombre moyen de visites ambulatoires ne peut pas expliquer, à lui seul, le délai ambulatoire moyen de prise en charge médical. Bref, les variables expliquant les délais d'attente de prise en charge semblent nombreuses. 
+
+Commençons par filtrer les données des urgences pour les 4 dernières années (filter(annee == c("2020-2021", "2021-2022", "2022-2023", "2023-2024")). De plus, nous voulons avoir le nombre moyen de visites et le délai moyen pour les patients ambulatoires selon les régions sociosanitaires et selon les années. Le résultat du code est simple : nous obtenons seulement les données pour les 4 dernières années, en excluant le total provincial. 
+```{r}
+# Filtrer les données des urgences pour le graphique des 4 dernières années cumulatives 
+filtered_urgences_cumul <- my_urgences %>%
+  filter(annee == c("2020-2021", "2021-2022", "2022-2023", "2023-2024"), 
+         region != "Total provincial") %>%
+  group_by(region, annee) %>%
+  count(nb_visites_ambulatoire, delai_pec_ambulatoire) %>%
+  summarise(mean_visites_amb = mean(nb_visites_ambulatoire), 
+            mean_delai_pec_amb = mean(delai_pec_ambulatoire)) %>%
+  print()
+```
+
+Avec les données filtrées précédemment faites, nous pouvons maintenant construire un graphique qui permettra de regarder la tendance des 4 dernières années. Il est vrai que ces deux variables ne sont pas proportionnelles, soit que le nombre de visites n'explique pas le délai d'attente, mais regardons si les points des 4 dernières années se situent dans les mêmes valeurs. 
+```{r}
+# Relation entre le délai ambulatoire moyen et le le nombre moyen de visites ambulatoires pour les 4 dernières années 
+ggplot(filtered_urgences_cumul,
+       aes(x = mean_visites_amb,
+           y = mean_delai_pec_amb, 
+           colour = region, 
+           shape = annee)) + 
+  geom_jitter() +
+  labs(title = "Le délai d'attente selon le nombre de visites à l'urgence", 
+       subtitle = "Selon les régions sociosanitaires du Québec des 4 dernières années",
+       x = "Le nombre moyen de visites ambulatoires", 
+       y = "Le délai ambulatoire moyen d'attente", 
+       colour = "Région sociosanitaire", 
+       shape = "Année") + 
+  theme(legend.text = element_text(size = 6), 
+        legend.title = element_text(size = 8), 
+        legend.key.size = unit(0.5, "cm"), 
+        legend.spacing.y = unit(0.2, "cm"), 
+        legend.spacing.x = unit(0.2, "cm"), 
+        legend.margin = margin(5,5,5,5))
+```
+
+Afin d'éviter les répétitions, prenons deux exemples pour démontrer le type d'analyse et de conclusions. Tout d'abord, la région du Saguenay-Lac-Saint-Jean est représentée par la couleur rose. Il est possible de remarquer dans le graphique que le nombre moyen de visites ambulatoires et le délai ambulatoire moyen d'attente pour les années 2020-2021, 2022-2023 et 2023-2024 se rapprochent l'un des autres. Cependant, l'année 2021-2022 se démarque avec un nombre moyen de visites ambulatoires plus élevé que les autres années, mais un délai ambulatoire moyen d'attente semblable aux autres années. La conclusion de ces observations, pour cette région, est que la tendance des deux variables se maintient généralement selon les années. En effet, le nombre moyen de visites ambulatoires restent stables selon les années, tout comme le délai ambulatoire moyen d'attente. Ensuite, prenons la région de Chaudière-Appalaches pour le deuxième exemple d'analyse (couleur brune). De manière intéressante, la relation pour les années 2020-2021, 2021-2022 et 2022-2023 pour Chaudière-Appalaches est presque linéaire. En effet, pour ces trois années, le délai ambulatoire moyen d'attente augmente de manière presque proportionnelle selon le nombre moyen de visites ambulatoires. Cependant, pour l'année 2023-2024, la tendance ne suit pas : le délai ambulatoire moyen (environ 1.8 heure) est plus élevé, en ayant moins de visites ambulatoires (moins de 20 000 visites). Pour cette région, nous pouvons conclure que, généralement, plus il y a de visites ambulatoires, plus le délai de prise en charge est long. La différence lors de l'année dernière peut être expliquée par plusieurs facteurs, tels qu'une baisse du personnel hospitalier. Finalement, afin de conclure cette question, nous pouvons supposer que les centres hospitaliers ont tendance à maintenir leur délai ambulatoire d'attente ainsi que le nombre de visites ambulatoires : ces deux variables sont semblables d'une année à l'autre, sauf exception. De plus, le graphique permet de voir la tendance générale pour les deux variables, soit que le délai ambulatoire d'attente varie entre 2 et 4 heures alors que le nombre de visites ambulatoires varie entre 10 000 et 20 000 visites. 
+
+
+# 5 - Quelle est la corrélation entre la densité de la population et l'achalandage à l'urgence selon les régions sociosanitaires pour l'année courante?
+De manière complémentaire, voici une première analyse, soit la proportion de la population en 2023 des régions sociosanitaires. Pour ce faire, nous pouvons (1) calculer le pourcentage de la proportion d'une région et (2) un diagramme circulaire pour les différentes régions. Tout d'abord, nous allons calculer le pourcentage de la population des différentes régions sociosanitaires. Ceci permettra de voir la distribution des habitants du Québec. 
+```{r}
+# Pourcentage de la population selon les régions sociosanitaires
+population_2023_pourcentage <- population_2023 %>%
+  mutate(pourcentage = `population `/sum(`population `)*100) %>%
+  arrange(desc(pourcentage)) %>%
+  print()
+```
+
+Il est rapidement possible de voir que les régions de Montréal et de la Montérégie ont la densité de population la plus élevée, avec un pourcentage de 24.1% et 16.9%, respectivement. Ceci permet de rapidement mettre en évidence les régions sociosanitaires les plus peuplées ainsi que les moins peuplées.
+
+Cependant, les pourcentages peuvent être redondants et difficiles à comparer lorsque les régions sont nombreuses. Ainsi, nous pouvons représenter la population des régions avec un diagramme circulaire. Toujours dans le but de faciliter l'interprétation, nous n'inclurons pas les pourcentages de la population. Cette représentation visuelle permettra simplement d'identifier les régions ayant le plus d'habitants ou le moins d'habitants. 
+```{r}
+# Diagramme circulaire de la population selon les régions du Québec
+ggplot(population_2023_pourcentage, aes(x = "", y = `population `, fill = region_sociosanitaire)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y") +
+  labs(title = "Répartition de la population québécoise en 2023",
+       subtitle = "Selon les régions sociosanitaires",
+       fill = "Région sociosanitaire") +
+  theme_void()
+```
+
+Ce graphique ne permet pas d'établir de lien direct avec les urgences du Québec, mais il permet de bien représenter la distribution de la population selon les régions sociosanitaires. Bref, il permet d'obtenir une vue d'ensemble de la population québécoise, ce qui sera pratique lorsque nous comparerons les données des urgences à la population. 
+
+Afin de clarifier un paramètre, l'achalandage d'une urgence correspond au nombre de visites pour les patients (nb_visites_total). Ceci étant dit, la première étape afin de répondre à cette question est de sélectionner les données que nous voulons dans le jeu de données my_urgences. Ainsi, nous voulons la région, le nombre de visites totales, l'année et le rss (variable nécessaire pour la jonction des données). Nous voulons filtrer les données pour l'année courante, en excluant le total provincial. De plus, nous allons regrouper les données selon la région et le rss. Finalement, nous allons faire la moyenne des visites totales afin de simplifier l'analyse. 
+```{r}
+# Sélection des données des urgences en 2024-2025 
+urgences_5 <- my_urgences %>%
+  select(region, nb_visites_total, annee, rss) %>%
+  filter(annee == "2024-2025", 
+         region != "Total provincial") %>%
+  group_by(region, rss) %>%
+  summarise(mean_visites_total = mean(nb_visites_total)) %>%
+  print()
+```
+
+Ensuite, nous devons ajouter les données de la population (population_2023) selon les régions sociosanitaires au nouveau jeu de données (urgences_5). Pour ce faire, nous allons joindre les deux jeux de données avec la fonction inner_join() et la variable commune choisie est le rss (numéro de région sociosanitaire). Le résultat de cette fonction sera d'obtenir un jeu de données (urgences_5_pop) qui contient la région, le nombre moyen de visites totales ainsi que la population en 2023 pour les régions sociosanitaires. 
+```{r}
+# Joindre les données de la population avec celles des urgences 
+urgences_5_pop <- inner_join(urgences_5, population_2023, by = "rss") %>%
+  print()
+```
+
+Nous pouvons maintenant construire le graphique avec le nouveau jeu de données, soit urgences_5_pop. Ici, afin de voir s'il y a une relation linéaire entre les deux variables, nous allons utiliser ggplot et geom_point, où la population est la variable "x" et le nombre moyen de visites est la variable "y". Nous regardons également la relation selon les régions sociosanitaires. 
+```{r}
+# Visualisation de la relation entre le nombre de visites selon la population en 2024-2025
+ggplot(urgences_5_pop, 
+       aes(x = `population `, 
+           y = mean_visites_total, 
+           colour = region)) +
+  geom_point() +
+  labs(title = "Le nombre moyen de visites selon la population", 
+       subtitle = "Selon les régions sociosanitaires pour l'année 2024-2025", 
+       x = "Population en 2023", 
+       y = "Nombre moyen de visites ", 
+       colour = "Région sociosanitaire")
+```
+
+Tout d'abord, nous ne pouvons pas voir de relation linéaire entre les deux variables. Cependant, nous sommes en mesure de faire quelques conclusions. En effet, nous pouvons voir une densité de points plus intense entre un intervalle de population de 100 000 à 750 000 habitantes et un intervalle de visites de 20 000 à 50 000. Cette observation permet de supposer que, pour cette année, la majorité des régions ont un nombre moyen de visites assez semblable. Ensuite, nous sommes en mesure de remarquer deux points particuliers : les régions de la Gaspésire-Îles-de-la-Madeleine (vert bleu) et Côte-Nord (vert jaune). En effet, ces deux points ont la population la plus petite ainsi que le nombre de visites le plus petit. Ceci mène à penser que plus la population est petite, moins il y a de visites aux urgences. Toutefois, ce n'est pas le cas. La région de Lanaudière (bleu vert) se démarque : pour une population d'environ 500 000, le nombre de visites est le plus élevé (supérieur à 70 000 visites). De plus, la région de Montréal (mauve) vient également briser cette supposition puisque pour la population la plus grande (supérieure à 2 000 000), le nombre de visites est inférieur à 60 000. Ainsi, il n'est pas possible d'établir une relation linéaire entre les deux variables. Évidemment, il y a plusieurs facteurs qui peuvent expliquer cette problématique, telle qu'une population plus vieillissante (région de Lanaudière). Nous avons toutefois été en mesure d'établir une tendance en ce qui concerne la majorité des régions pour le nombre de visites et la population pour l'année courante. 
+
+Afin de confirmer qu'il n'existe pas de relation linéaire entre la population et le nombre de visites pour les régions sociosanitaires, nous pouvons établir le coefficient de corrélation. Pour ce faire, nous allons utiliser la fonction lm() afin d'obtenir le coefficient. 
+```{r}
+# Coefficient de corrélation entre la population et le nombre de visites en 2024-2025
+lm(mean_visites_total ~ `population `, data = urgences_5_pop) %>% 
+  summary() %>%
+  print()
+```
+
+Ce résultat de coefficient de corrélation permet d'appuyer notre analyse du graphique précédent (question 5). En effet, le coefficient de corrélation est de 0.2709, ce qui s'éloigne de la valeur de 1 (relation linéaire parfaite). Ainsi, nous sommes en mesure de conclure que la population ne peut pas expliquer, à elle seule, le nombre moyen de visites aux urgences des régions du Québec. Le graphique a permis de bien visualiser la distinction entre les différentes régions, rappelons l'exemple de Montréal. Malgré une population très élevée, le nombre moyen de visites est en bas de 60 000 pour l'année courante, ce qui tend vers la majorité des régions. 
+
+
+# 6 - Quelle est la relation entre l'achalandage, la densité de la population et le nombre de patients pris en charge dans les urgences selon les régions sociosanitaires du Québec pour l'année courante? 
+Afin de clarifier un paramètre, l'achalandage d'une urgence correspond au nombre de visites pour les patients (nb_visites_total). Afin de répondre à la question ci-dessus, nous devons sélectionner le nombre de visites totales, le rss (joindre les données), la région, l'année et le nombre d'usagers pris en charge pour l'année courante. Nous voulons également exclure le total provincial. Finalement, nous voulons les moyennes des variables selon les régions. 
+```{r}
+# Sélection des données dans my_urgences pour le graphique suivant 
+urgences_Q6 <- my_urgences %>%
+  select(nb_visites_total, rss, region, nb_usagers_pec_total, annee) %>%
+  filter(annee == "2024-2025", 
+         region != "Total provincial") %>%
+  group_by(region, rss) %>%
+  summarise(mean_visites = mean(nb_visites_total), 
+            mean_usagers_pec = mean(nb_usagers_pec_total)) %>%
+  print()
+```
+
+Avec les données sélectionnées précédentes, nous pouvons joindre les données de la population en utilisant le rss comme variable commune. Le résultat de cette jonction est que la population de la région sociosanitaire est maintenant dans la même table de valeurs que les deux variables suivantes : le nombre de visites totales et le nombre de patients pris en charge. 
+```{r}
+# Joindre les données de la population au jeu de données urgences_Q6
+urgences_Q6_pop <- inner_join(urgences_Q6, population_2023, by = "rss") %>%
+  print()
+```
+
+Nous avons maintenant le jeu de données propres et contenant seulement les données dont nous avons besoin (urgences_Q6_pop). Nous sommes maintenant en mesure de représenter la relation entre le nombre de visites totales moyennes et le nombre moyen de patients pris en charge, selon la population des régions sociosanitaires. Pour ce faire, nous utiliserons les facettes afin de bien isoler les régions sociosanitaires, pour l'année 2024-2025. Finalement, afin de bien distinguer les couleurs du gradient de la population, nous utiliserons le theme_dark() afin d'obtenir un fond foncé. 
+```{r}
+# Visualisation des visites totales, des patients pris en charge et de la population pour les régions en 2024-2025
+ggplot(urgences_Q6_pop, 
+       aes(x = mean_visites,
+           y = mean_usagers_pec, 
+           colour = `population `)) +
+  geom_point() +
+  facet_wrap(~ region, nrow = 5) +
+  labs(title = "Visites totales et les patients pris en charge en 2024-2025", 
+       subtitle = "Selon la population des régions du Québec", 
+       x = "Nombre moyen de visites à l'urgence", 
+       y = "Nombre moyen de patients pris en charge", 
+       color = "Région sociosanitaire") +
+  theme_dark() + 
+  theme(legend.text = element_text(size = 6), 
+        legend.title = element_text(size = 8), 
+        legend.key.size = unit(0.5, "cm"),
+        legend.margin = margin(5,5,5,5), 
+        axis.title.x = element_text(size = 8), 
+        axis.title.y = element_text(size = 8), 
+        axis.text = element_text(size = 6))
+```
+
+Comme mentionné, ce graphique permet de mettre en relation le nombre moyen de visites totales et le nombre moyen de patients pris en charge par un médecin selon les différentes régions sociosanitaires, où la population de ces régions est indiquée par un gradient de couleur bleue. Ici, malgré le fait que le nombre de visites et le nombre patients pris en charge ne forment pas de relation linéaire, nous pouvons tout de même regarder la tendance selon la population des régions. Prenons comme exemple les deux régions les plus peuplées, soit Montréal et la Montérégie. La région de Montréal a une population supérieure à 2 000 000 d'habitants, reçoit environ 55 000 visites à l'urgence et prend en charge environ 45 000 patients. La région de la Montérégie a une population d'environ 1 500 000 habitants, reçoit plus de 60 000 visites à l'urgence et prend en charge 45 000 patients. Ces deux exemples permettent de tirer plusieurs observations. Tout d'abord, la population n'influence pas le nombre de visites : Montréal, la région la plus peuplée, reçoit moins de visites que la Montérégie (moins peuplée). Il se peut que la population soit plus vieillissante dans cette région, ce qui expliquerait les visites plus nombreuses. Ensuite, le nombre de patients pris en charge pour ces deux régions est semblable : la Montérégie a donc eu plus de patients qui n'ont pas été pris en charge. Une explication plausible peut être la mauvaise gestion des urgences pour cette région ou encore un manque de personnel hospitalier. Finalement, un dernier exemple intéressant est la région de Lanaudière. En effet, cette région n'est pas très peuplée (environ 500 000 habitants), mais elle est la région avec le plus de visites à l'urgence (supérieures à 60 000). Cependant, le nombre de patients pris en charge est le plus élevé (supérieur à 55 000). Voici l'hypothèse plausible pour ces observations. Cette région a une population vieillissante, ce qui peut provoquer une augmentation des visites à l'urgence. Cependant, malgré la forte affluence dans les urgences, le nombre de patients pris en charge est très élevé : ceci laisse penser que les urgences de cette région sont bien organisées/gérées et qu'il y a assez de personnel pour la demande. Finalement, une dernière explication peut être que les cas aux urgences sont simples et ne nécessitent pas d'intervention de professionnels médicaux. Ainsi, tous les patients peuvent être pris en charge. Cependant, un cas complexe peut être redirigé vers un grand centre (ex. Montréal) pour des soins spécialisés. Ceci peut affecter les deux variables (nombre de visites et patients pris en charge).
+
+Cette présente analyse se terminera par la détermination du pourcentage de visites de patients âgés de 75 ans et plus par rapport au nombre total de visites. Cette proportion permettra de vérifier notre hypothèse, soit que certaines régions ont une population plus vieillissante, ce qui fait augmenter le nombre de visites totales à l'urgence, malgré une faible population. Pour ce faire, nous utiliserons les données pour l'année courante en excluant le total provincial. 
+```{r}
+# Pourcentage de patients âgés de 75 ans et plus en 2024-2025
+Pourcentage_75_ans <- my_urgences %>%
+  select(region, annee, nb_usagers_75ans_et_plus_total, nb_visites_total) %>%
+  filter(annee == "2024-2025", 
+         region != "Total provincial") %>%
+  group_by(region) %>%
+  summarise(mean_75_ans = mean(nb_usagers_75ans_et_plus_total), 
+            mean_visites = mean(nb_visites_total)) %>%
+  mutate(pourcentage = mean_75_ans/mean_visites*100) %>%
+  arrange(desc(pourcentage)) %>%
+  print()
+```
+
+Ces pourcentages permettent de remarquer que les régions ont un pourcentage de patients âgés relativement semblable (intervalle allant de 12.1% à 19.2%). Cette proportion ne permet pas de supposer qu'une population vieillissante peut faire augmenter le nombre de visites totales à l'urgence, malgré une faible population. En effet, les régions ont toutes une proportion de patients âgés qui se ressemble, indépendamment de la population. Par exemple, Laval a une proportion de 19.2% de patients âgés alors que la Montérégie a une proportion de 18.9% de patients âgés. De plus, nous avons supposé que la région de Lanaudière avait une population vieillissante, puisqu'elle a le plus de visites, pour une des populations les plus faibles. Cependant, lorsque nous regardons la proportion de patients âgés, nous pouvons remarquer qu'elle se situe dans l'intervalle (18.2% - 3e place dans la liste). Ici, nous aurions pu nous attendre à une proportion élevée, qui se distingue des autres, comme un pourcentage de 25-30%. Ainsi, nous ne pouvons pas assumer qu'une population vieillissante peut augmenter le nombre de visites, car les régions ont une proportion de patients âgés qui se ressemblent. Notre hypothèse ne permet donc pas d'expliquer la hausse de visites. 
+
+
+
+### Discussion générale et conclusion 
+
+Dans la présente section, nous résumerons les différentes discussions et analyses faites dans la section analyse. Tout d'abord, la relation qui explique les délais d'attente aux urgences ainsi que le nombre de visites totales est loin d'être simple. Cette analyse a permis de démontrer qu'il n'y a pas de lien proportionnel (relation linéaire) entre les variables testées. Ces résultats ont permis d'émettre l'hypothèse que la relation expliquant les délais d'attente et le nombre de visites implique plusieurs facteurs, tels que des facteurs intrinsèques (patients à l'urgence) et facteurs extrinsèques (conditions météo qui empêchent l'arrivée du personnel). Ainsi, il est très difficile d'établir un lien de cause à effet, avec seulement quelques variables, pour ce type de relation. 
+
+De plus, cette analyse a également permis de mieux comprendre les délais d'attente aux urgences. Il a été très intéressant de voir qu'il n'y a pas eu de résultats extrêmes, soit un délai d'attente de prise en charge très élevé. Comme mentionné dans l'introduction de ce projet, les médias ont tendance à publier les délais interminables des différentes urgences au Québec. Cependant, comme nous avons pu le voir dans cette analyse, les délais de prise en charge ne sont pas catastrophiques, comme nous le présentent les médias. De plus, les patients pris en charge sont proportionnels au nombre de visites, soit que presque tous les patients sont pris en charge. Ainsi, il semblerait que les médias présentent seulement des cas isolés : ces journaux ne parlent que des délais d'attente. Cependant, quelles étaient les conditions météo? Les conditions à l'urgence? En effet, un grave accident sur l'autoroute, impliquant plusieurs voitures, dues à une forte tempête de neige/verglas, peut faire augmenter les délais d'attente puisque l'urgence déborde et plusieurs membres du personnel peuvent être en retard à cause des conditions météo.  
+
+Ensuite, il semblait logique de supposer qu'une forte population entraîne un nombre de visites plus grand aux urgences. Cependant, nous avons remarqué que ce n'est pas le cas : une forte population n'explique pas le nombre de patients à l'urgence. Ceci nous a mené à penser qu'une population vieillissante pourrait expliquer une hausse de visites aux urgences. Toutefois, nous n'avons pas pu établir un lien pour cette variable. En effet, la proportion de patients âgés, selon les différentes régions, est assez semblable. Ces résultats ont donc permis de comprendre qu'il est difficile de prédire l'achalandage d'une urgence, en fonction de la densité de population, mais également en fonction de la tranche d'âge de ladite population. 
+
+Pour poursuivre, il est important de mentionner que ces données restent approximatives. De plus, ces observations sont également des moyennes des urgences : certains cas isolés sont perdus. En effet, nous devons considérer ce biais lors de l'interprétation des résultats. De manière générale, les urgences du Québec ont des délais d'attente allant de 2 à 4 heures, ce qui est acceptable. Cependant, ce type de données ne permet pas d'identifier des cas isolés, tels qu'une journée de tempête ou de grève syndicale. L'analyse nous permet toutefois d'établir des observations générales : les lacunes isolées dans les urgences doivent être identifiées de manière individuelle. Un autre biais est qu'il est difficile de prédire les données des urgences, telles que le nombre de visites, les patients sur civière ou encore la durée du séjour. En effet, aucun moyen connu ne permet de prédire un accident ou encore, une pandémie. Nous pouvons effectuer une analyse sur l'année courante et les dernières années, mais il est impossible de prédire, avec précision, les statistiques pour la prochaine année. Finalement, le taux de migration d'une région à une autre est également difficile à prédire, ce qui introduit également un biais quant à la relation des urgences avec la population. 
+
+Afin d'émettre une conclusion générale pour cette analyse, tous les résultats présentés laissent supposer que la gestion des centres hospitaliers des différentes régions sociosanitaires fait partie de la relation entre les délais d'attente de prise en charge des urgences. Il n'existe pas une variable, à elle seule, qui peut expliquer ces délais d'attente : une multitude de facteurs doivent être pris en compte. En effet, une bonne gestion des urgences, soit avoir un personnel proportionnel à la demande, avoir assez de lits disponibles ou encore, avoir assez d'équipements médicaux, peut grandement améliorer la situation d'une urgence. Ainsi, il est le devoir des gouvernements (ex. Ministère de la Santé) de discuter avec les membres du personnel hospitalier afin d'identifier les lacunes, au sein des urgences d'une région, ainsi que d'essayer de réduire les problématiques rencontrées dans ces urgences. 
